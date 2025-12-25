@@ -1,0 +1,9 @@
+[
+  {
+    "id": 1,
+    "displayName": "一等奖",
+    "image": "images/1.png",
+    "winnersPerRound": 2,
+    "totalRounds": 1
+  }
+]
