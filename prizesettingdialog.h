@@ -9,6 +9,8 @@
 #include <QHeaderView>
 #include <QCheckBox>
 #include <QFileInfo>
+#include <QLabel>      // 必须包含这个
+#include <QSpinBox>    // 必须包含这个
 #include "widget.h"
 
 class PrizeSettingDialog : public QDialog {
@@ -17,14 +19,22 @@ public:
     explicit PrizeSettingDialog(const QVector<PrizeConfig> &prizes, QWidget *parent = nullptr);
     QVector<PrizeConfig> getNewConfigs() const;
 
+protected:
+    // 处理拦截滚轮事件，防止误触
+    bool eventFilter(QObject *watched, QEvent *event) override;
+
 private slots:
-    void moveRowUp();   // 上移逻辑
-    void moveRowDown(); // 下移逻辑
+    void moveRowUp();
+    void moveRowDown();
 
 private:
     QTableWidget *table;
+    QLabel *totalSumLabel;
+
     void setRowData(int row, const PrizeConfig &p);
-    void swapRows(int rowA, int rowB); // 交换两行数据的核心函数
+    void swapRows(int rowA, int rowB);
+    void updateTotalCount(int row);
+    void updateGrandTotal();
 };
 
 #endif

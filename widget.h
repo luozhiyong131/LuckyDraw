@@ -7,7 +7,7 @@
 #include <QString>
 #include <QTimer>
 #include <QLabel>
-
+#include <QElapsedTimer>
 
 // 奖项配置结构体
 struct PrizeConfig
@@ -54,7 +54,7 @@ protected:
     // UI 更新逻辑
     void updatePrizeUI();
     void processRoundLogic();
-    QSet<QString> getIdsFromCurrentSection(const QString &prizeName);
+    QSet<QString> getIdsFromCurrentSection(const PrizeConfig &config);
     void prepareDynamicLabels(int availableCount);
     void initUIState();
     void savePrizeConfigToJson();
@@ -79,6 +79,9 @@ private:
     QVector<Person> m_people;    // 全体名单
     QVector<PrizeConfig> m_prizes; // 奖项列表
     int m_currentPrizeIndex = 0; // 当前正在抽第几个奖
+
+    int m_settingsClickCount = 0; // 记录点击次数
+    QElapsedTimer m_clickTimer;    // 记录两次点击的时间间隔
 
     // 动画控制
     QTimer *m_timer = nullptr;   // 用于名字滚动

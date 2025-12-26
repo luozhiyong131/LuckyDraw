@@ -22,6 +22,8 @@ Widget::Widget(QWidget *parent)
 
     setFullBackground();
     ui->joinCountLabel->hide();
+    m_clickTimer.invalidate(); // 初始化计时器为无效状态
+    m_settingsClickCount = 0;
     this->showMaximized();
     this->setWindowIcon(QIcon(":/img/logo.ico"));
     m_timer = new QTimer(this);
@@ -83,29 +85,34 @@ void Widget::savePrizeConfigToJson() {
 }
 
 // 2. 设置按钮点击事件
-void Widget::on_btnSettings_clicked() {
-    PrizeSettingDialog dlg(m_prizes, this);
-    if (dlg.exec() == QDialog::Accepted) {
-        m_prizes = dlg.getNewConfigs();
-        std::sort(m_prizes.begin(), m_prizes.end(), [](const PrizeConfig &a, const PrizeConfig &b){
-            return a.id < b.id;
-        });
+void Widget::on_btnSettings_clicked()
+{
+    // 1. 检查时间间隔：如果两次点击超过 1 秒，重新计数
+    if (!m_clickTimer.isValid() || m_clickTimer.elapsed() > 1000) {
+        m_settingsClickCount = 1;
+    } else {
+        m_settingsClickCount++;
+    }
 
-        savePrizeConfigToJson();
+    // 每次点击后重写计时器
+    m_clickTimer.restart();
 
-        // 【关键】重置所有逻辑状态机
-        m_isRunning = false;
-        m_isPendingPrizeSwitch = false;
-        if(m_timer->isActive()) m_timer->stop();
+    // 2. 检查是否达到 5 次
+    if (m_settingsClickCount >= 5) {
+        // 重置计数器，防止下次进来又是 1 次就开
+        m_settingsClickCount = 0;
+        m_clickTimer.invalidate();
 
-        // 彻底清空当前界面上的名牌
-        qDeleteAll(m_dynamicLabels);
-        m_dynamicLabels.clear();
+        // --- 这里写你原本打开设置界面的代码 ---
+        PrizeSettingDialog dialog(m_prizes, this);
+        if (dialog.exec() == QDialog::Accepted) {
+            m_prizes = dialog.getNewConfigs();
 
-        // 重新对账
-        loadHistoryFromTxt();
-
-        QMessageBox::information(this, "通知", "配置已更新，进度已重新核对。");
+            updatePrizeUI();
+        }
+    } else {
+        // 可选：在控制台或者状态栏小提示，调试用，正式发布可以删掉
+        qDebug() << "还要再点" << (5 - m_settingsClickCount) << "次打开配置";
     }
 }
 
@@ -292,7 +299,7 @@ void Widget::onTimerTimeout()
 
     // 1. 准备实时滚动池
     QVector<Person> pool;
-    QSet<QString> peopleWonInThisPrize = getIdsFromCurrentSection(currentPrize.displayName);
+    QSet<QString> peopleWonInThisPrize = getIdsFromCurrentSection(currentPrize);
     for (const Person &p : m_people) {
         if (currentPrize.allowUsedPeople) {
             if (!peopleWonInThisPrize.contains(p.employeeId)) pool.append(p);
@@ -329,7 +336,7 @@ void Widget::drawFinalWinners()
 
     // 1. 筛选当前池子
     QVector<Person> pool;
-    QSet<QString> peopleWonInThisPrize = getIdsFromCurrentSection(currentPrize.displayName);
+    QSet<QString> peopleWonInThisPrize = getIdsFromCurrentSection(currentPrize);
     for (const Person &p : m_people) {
         if (currentPrize.allowUsedPeople) {
             if (!peopleWonInThisPrize.contains(p.employeeId)) pool.append(p);
@@ -380,12 +387,18 @@ void Widget::drawFinalWinners()
     }
 }
 
-QSet<QString> Widget::getIdsFromCurrentSection(const QString &prizeName)
+QSet<QString> Widget::getIdsFromCurrentSection(const PrizeConfig &config)
 {
     QSet<QString> ids;
     QString filePath = QCoreApplication::applicationDirPath() + "/winners_config.txt";
     QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) return ids;
+
+    // --- 修改点：构造唯一的识别标签 ---
+    // 组合：[等级-奖品名] 或 [等级-奖品名(All)]
+    QString target = QString("%1-%2").arg(config.displayName, config.priceName);
+    if (config.allowUsedPeople) target += "(All)";
+    QString bracketTitle = "[" + target + "]";
 
     QTextStream in(&file);
     bool inTargetPrize = false;
@@ -393,17 +406,16 @@ QSet<QString> Widget::getIdsFromCurrentSection(const QString &prizeName)
         QString line = in.readLine().trimmed();
         if (line.isEmpty()) continue;
 
-        // 判定是否进入了当前奖项区域
-        if (line == "[" + prizeName + "]") {
+        // --- 修改点：匹配组合后的标签 ---
+        if (line == bracketTitle) {
             inTargetPrize = true;
             continue;
         }
-        // 如果遇到了下一个奖项标签，说明当前奖项结束了
-        if (line.startsWith("[") && line != "[" + prizeName + "]") {
+        // 遇到下一个 [ 说明当前奖项段落结束
+        if (line.startsWith("[") && line != bracketTitle) {
             inTargetPrize = false;
         }
 
-        // 如果在目标区域，读取行首的工号
         if (inTargetPrize) {
             QString id = line.split(" ").at(0);
             if (!id.isEmpty()) ids.insert(id);
@@ -442,45 +454,37 @@ void Widget::saveWinnersToTxt(const QString &prizeName, const QVector<Person> &w
     QString filePath = QCoreApplication::applicationDirPath() + "/winners_config.txt";
     QFile file(filePath);
 
-    // 获取当前奖项的配置，判断是否是全员抽
+    // --- 修改点 1：获取当前奖项配置，构造唯一标识 ---
     const PrizeConfig &current = m_prizes[m_currentPrizeIndex];
 
-    // 准备标题：如果是全员抽，加上标志位 (All)
-    QString finalTitle = prizeName;
+    // 组合：等级-奖品名
+    QString finalTitle = QString("%1-%2").arg(current.displayName, current.priceName);
     if (current.allowUsedPeople) {
         finalTitle += "(All)";
     }
 
-    // 检查这个标题在文件里是否已经存在（防止每轮都重复写标题）
+    // --- 修改点 2：检查这个“组合标签”是否已存在 ---
     bool titleExists = false;
-    if(file.exists()){
-        if(file.open(QIODevice::ReadOnly | QIODevice::Text)){
-            QString content = file.readAll();
-            if(content.contains("[" + finalTitle + "]")){
-                titleExists = true;
-            }
-            file.close();
-        }
+    if(file.exists() && file.open(QIODevice::ReadOnly | QIODevice::Text)){
+        QString content = file.readAll();
+        if(content.contains("[" + finalTitle + "]")) titleExists = true;
+        file.close();
     }
 
     if(file.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)){
         QTextStream out(&file);
-        // 如果是新奖项或新文件，另起一行写标题
-        if(!titleExists){
+        // 如果是该奖项的第一轮，写入 [等级-奖品名] 标签
+        if(!titleExists) {
             out << "\n[" << finalTitle << "]\n";
         }
 
         for(const Person &p : winners){
             out << p.employeeId << " " << p.name << "\n";
-            qDebug() << "已同步硬盘：" << p.employeeId << p.name;
         }
-
-        out.flush();
         file.close();
-    } else {
-        qDebug() << "无法保存！文件打开失败：" << file.errorString();
     }
 }
+
 // 恢复：启动时自动读档，填入 m_usedPeople
 void Widget::loadHistoryFromTxt() {
     QString filePath = QCoreApplication::applicationDirPath() + "/winners_config.txt";
@@ -493,70 +497,60 @@ void Widget::loadHistoryFromTxt() {
     if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
         QTextStream in(&file);
         QString currentSection = "";
-        bool isAllMemberSection = false;
+        bool isAllMemberSection = false; // 标识当前段落是否为“全员抽奖”
 
         while (!in.atEnd()) {
             QString line = in.readLine().trimmed();
             if (line.isEmpty()) continue;
+
+            // --- 修改点 1：解析增强后的标签 ---
             if (line.startsWith("[") && line.endsWith("]")) {
                 currentSection = line.mid(1, line.length() - 2);
+                // 判断标签是否以 (All) 结尾
                 isAllMemberSection = currentSection.endsWith("(All)");
             } else {
                 QString empId = line.split(" ").at(0);
-                if (!isAllMemberSection) m_usedPeople.insert(empId);
+
+                // --- 修改点 2：根据标识位决定是否加入全局黑名单 ---
+                // 如果当前段落带 (All)，说明是全员抽奖，不加进 m_usedPeople
+                if (!isAllMemberSection) {
+                    m_usedPeople.insert(empId);
+                }
+
+                // 记录该奖项已中奖人数，用于恢复轮数进度
                 prizeCountMap[currentSection]++;
             }
         }
         file.close();
     }
 
-    // --- 核心恢复逻辑 ---
+    // --- 修改点 3：匹配进度时使用“等级-奖品”组合键 ---
     bool found = false;
     for (int i = 0; i < m_prizes.size(); ++i) {
-        QString key = m_prizes[i].displayName;
-        if (m_prizes[i].allowUsedPeople) key += "(All)";
+        const auto &config = m_prizes[i];
+        QString key = QString("%1-%2").arg(config.displayName, config.priceName);
+        if (config.allowUsedPeople) key += "(All)";
 
         int drawn = prizeCountMap.value(key, 0);
-        int totalNeed = m_prizes[i].totalRounds * m_prizes[i].winnersPerRound;
+        int totalNeed = config.totalRounds * config.winnersPerRound;
 
         if (drawn < totalNeed) {
             m_currentPrizeIndex = i;
-            m_currentRound = (drawn / m_prizes[i].winnersPerRound) + 1;
+            m_currentRound = (drawn / config.winnersPerRound) + 1;
             found = true;
             break;
         }
     }
 
-    // 如果没找到未完成的进度，说明要么全抽完了，要么新加了奖项
+    // (剩余 UI 更新代码保持不变)
     if (!found) {
-        m_currentPrizeIndex = m_prizes.size() - 1; // 默认指向最后一个
-        m_currentRound = m_prizes.last().totalRounds;
-
-        // 只有当最后一个奖项也确实抽完了，才禁用
-        QString lastKey = m_prizes.last().displayName;
-        if (m_prizes.last().allowUsedPeople) lastKey += "(All)";
-        if (prizeCountMap.value(lastKey, 0) >= (m_prizes.last().totalRounds * m_prizes.last().winnersPerRound)) {
-            ui->startDrawButton->setEnabled(false);
-            ui->startDrawButton->setText("抽奖已全部结束");
-        } else {
-            // 否则，可能是新加的奖项，或者是由于配置变动导致的，重置到第一项
-            m_currentPrizeIndex = 0;
-            m_currentRound = 1;
-            ui->startDrawButton->setEnabled(true);
-            ui->startDrawButton->setText("开始抽奖");
-        }
-    } else {
-        ui->startDrawButton->setEnabled(true);
-        ui->startDrawButton->setText("开始抽奖");
+        m_currentPrizeIndex = 0;
+        m_currentRound = 1;
     }
-
+    ui->startDrawButton->setEnabled(true);
+    ui->startDrawButton->setText("开始抽奖");
     updatePrizeUI();
     updateRoundUI();
-
-    // 更新左下角实际剩余人数
-    int available = 0;
-    for(const auto& p : m_people) if(!m_usedPeople.contains(p.employeeId)) available++;
-    ui->joinCountLabel->setText(QString("参与人数: %1").arg(available));
 }
 
 void Widget::on_startDrawButton_clicked()
@@ -567,12 +561,12 @@ void Widget::on_startDrawButton_clicked()
         const PrizeConfig &current = m_prizes[m_currentPrizeIndex];
 
         int count = 0;
-        // 获取本奖项内部已中奖名单（针对全员抽奖/独立奖项）
-        QSet<QString> peopleWonInThisPrize = getIdsFromCurrentSection(current.displayName);
+        // 【核心修改】：传入完整的 current 对象，匹配“等级-奖品名”分组逻辑
+        QSet<QString> peopleWonInThisPrize = getIdsFromCurrentSection(current);
 
         for (const Person &p : m_people) {
             if (current.allowUsedPeople) {
-                // 全员抽：只要本奖项没中过就算可用
+                // 全员抽：只要在本奖项（特定等级和奖品）没中过就算可用
                 if (!peopleWonInThisPrize.contains(p.employeeId)) count++;
             } else {
                 // 普通抽：必须全局没中过才算可用
@@ -594,6 +588,9 @@ void Widget::on_startDrawButton_clicked()
         qDeleteAll(m_dynamicLabels);
         m_dynamicLabels.clear();
 
+        // 【新增】：重置标题为“候选名单”
+        ui->rightTitle->setText("候选名单");
+
         // 切换后检查新奖项是否还有人可抽
         if (getAvailablePoolSize() <= 0) {
             ui->startDrawButton->setText("人员不足以开启新奖项");
@@ -608,6 +605,9 @@ void Widget::on_startDrawButton_clicked()
     if (m_isRunning) {
         m_isRunning = false;
         m_timer->stop();
+
+        // 【新增】：停止时切换标题
+        ui->rightTitle->setText("中奖名单");
 
         drawFinalWinners(); // 内部已包含隐藏多余框和设置字体的逻辑
 
@@ -633,7 +633,6 @@ void Widget::on_startDrawButton_clicked()
         // 3. 还有人，准备下一轮
         else {
             m_currentRound++;
-            // 如果剩余人数不够下一轮预设的人数，做一个友好提示
             if (availableAfterDraw < current.winnersPerRound) {
                 ui->startDrawButton->setText(QString("准备下轮(剩%1人)").arg(availableAfterDraw));
             } else {
@@ -641,7 +640,7 @@ void Widget::on_startDrawButton_clicked()
             }
         }
 
-        // 更新左下角参与人数标签（显示全局未中奖人数）
+        // 更新左下角参与人数标签
         int globalUnused = 0;
         for (const Person &p : m_people) if (!m_usedPeople.contains(p.employeeId)) globalUnused++;
         ui->joinCountLabel->setText(QString("参与人数: %1").arg(globalUnused));
@@ -658,6 +657,9 @@ void Widget::on_startDrawButton_clicked()
             return;
         }
 
+        // 【新增】：开始抽奖时切换标题
+        ui->rightTitle->setText("候选名单");
+
         // 清理上一轮的残余名牌
         if (ui->startDrawButton->text().contains("准备下一轮") || ui->startDrawButton->text().contains("准备下轮")) {
             qDeleteAll(m_dynamicLabels);
@@ -668,8 +670,6 @@ void Widget::on_startDrawButton_clicked()
         m_isRunning = true;
         ui->startDrawButton->setText("停止");
 
-        // 这里的 prepareDynamicLabels 会生成配置数量的框
-        // 但在滚动和结束时，我们会根据 availableCount 自动隐藏多余的
         prepareDynamicLabels(availableCount);
 
         m_timer->start(50);
