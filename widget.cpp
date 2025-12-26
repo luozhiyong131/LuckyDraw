@@ -12,6 +12,7 @@
 #include <QFile>
 #include "prizesettingdialog.h"
 #include <QMessageBox>
+#include "xlsxdocument.h"
 
 Widget::Widget(QWidget *parent)
     : QWidget(parent)
@@ -19,25 +20,10 @@ Widget::Widget(QWidget *parent)
 {
     ui->setupUi(this);
 
-    // setFullBackground();
-
-    // 在构造函数中
-    ui->btnSettings->setStyleSheet(
-        "QPushButton {"
-        "    background-color: rgba(255, 255, 255, 100);"  // 白色半透明（100/255 的透明度）
-        "    border: 1px solid rgba(255, 255, 255, 150);" // 浅色边框
-        "    border-radius: 5px;"                        // 圆角
-        "    color: #FFFFFF;"                             // 字体颜色（白色）
-        "    font-size: 14px;"
-        "}"
-        "QPushButton:hover {"
-        "    background-color: rgba(255, 255, 255, 150);"  // 鼠标悬停时稍微亮一点
-        "}"
-        "QPushButton:pressed {"
-        "    background-color: rgba(200, 200, 200, 100);"  // 按下时变暗
-        "}"
-        );
-
+    setFullBackground();
+    ui->joinCountLabel->hide();
+    this->showMaximized();
+    this->setWindowIcon(QIcon(":/img/logo.ico"));
     m_timer = new QTimer(this);
     connect(m_timer, &QTimer::timeout, this, &Widget::onTimerTimeout);
     QString path = QCoreApplication::applicationDirPath() + "/prizes.json";
@@ -54,7 +40,13 @@ Widget::Widget(QWidget *parent)
     QString csvPath =
         QDir(QCoreApplication::applicationDirPath())
             .filePath("people.csv");
-    loadPeopleCsv(csvPath);
+    QString excelPath =
+        QDir(QCoreApplication::applicationDirPath())
+            .filePath("people.xlsx");
+    //loadPeopleCsv(csvPath);
+    loadPeopleExcel(excelPath);
+
+
 
     loadHistoryFromTxt();
 
@@ -92,32 +84,28 @@ void Widget::savePrizeConfigToJson() {
 
 // 2. 设置按钮点击事件
 void Widget::on_btnSettings_clicked() {
-    // 弹出管理窗口
     PrizeSettingDialog dlg(m_prizes, this);
     if (dlg.exec() == QDialog::Accepted) {
-        // 更新内存数据
         m_prizes = dlg.getNewConfigs();
-
-        // 自动按 ID 排序
         std::sort(m_prizes.begin(), m_prizes.end(), [](const PrizeConfig &a, const PrizeConfig &b){
             return a.id < b.id;
         });
 
-        // 存入硬盘
         savePrizeConfigToJson();
 
-        // 重新对账进度（非常重要！）
+        // 【关键】重置所有逻辑状态机
+        m_isRunning = false;
+        m_isPendingPrizeSwitch = false;
+        if(m_timer->isActive()) m_timer->stop();
+
+        // 彻底清空当前界面上的名牌
+        qDeleteAll(m_dynamicLabels);
+        m_dynamicLabels.clear();
+
+        // 重新对账
         loadHistoryFromTxt();
 
-        // 刷新 UI 状态
-        ui->startDrawButton->setEnabled(true);
-        if(ui->startDrawButton->text().contains("结束")) {
-            ui->startDrawButton->setText("开始抽奖");
-        }
-        updatePrizeUI();
-        updateRoundUI();
-
-        QMessageBox::information(this, "通知", "配置已成功更新并生效！");
+        QMessageBox::information(this, "通知", "配置已更新，进度已重新核对。");
     }
 }
 
@@ -171,6 +159,41 @@ void Widget::loadPeopleCsv(const QString &path)
     file.close();
 
     // 加载完后更新界面上的统计数字
+    ui->joinCountLabel->setText(QString("参与人数: %1").arg(m_people.size()));
+}
+
+void Widget::loadPeopleExcel(const QString &path) {
+    QXlsx::Document xlsx(path);
+    if (!xlsx.load()) {
+        qWarning() << "读取 Excel 失败，请检查路径:" << path;
+        ui->joinCountLabel->setText("参与人数: 0 (Excel文件加载失败)");
+        return;
+    }
+
+    m_people.clear();
+    int row = 2; // 默认第一行是：工号, 姓名, 部门...
+
+    while (true) {
+        // 读取第一列和第二列
+        QVariant idVar = xlsx.read(row, 1);
+        QVariant nameVar = xlsx.read(row, 2);
+
+        // 如果工号那一格是空的，说明读到表格末尾了
+        if (idVar.isNull() || idVar.toString().trimmed().isEmpty()) {
+            break;
+        }
+
+        Person p;
+        p.employeeId = idVar.toString().trimmed();
+        // 如果有工号但没填姓名，给个“未知”占位
+        p.name = nameVar.isNull() ? "未知" : nameVar.toString().trimmed();
+
+        m_people.append(p);
+        row++;
+    }
+
+    // 更新界面：这里非常关键，只要 m_people 加载进来了，
+    // 后面的 loadHistoryFromTxt 就会自动对比黑名单
     ui->joinCountLabel->setText(QString("参与人数: %1").arg(m_people.size()));
 }
 
@@ -462,49 +485,34 @@ void Widget::saveWinnersToTxt(const QString &prizeName, const QVector<Person> &w
 void Widget::loadHistoryFromTxt() {
     QString filePath = QCoreApplication::applicationDirPath() + "/winners_config.txt";
     QFile file(filePath);
-    m_usedPeople.clear(); // 清空当前内存黑名单
+    m_usedPeople.clear();
 
     if (m_prizes.isEmpty()) return;
 
-    if (!file.exists() || !file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        m_currentPrizeIndex = 0;
-        m_currentRound = 1;
-        return;
-    }
+    QMap<QString, int> prizeCountMap;
+    if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QTextStream in(&file);
+        QString currentSection = "";
+        bool isAllMemberSection = false;
 
-    QTextStream in(&file);
-    QMap<QString, int> prizeCountMap; // 记录每个奖项已经抽了多少人
-    QString currentSection = "";
-    bool isAllMemberSection = false; // 标志：当前段落是否为全员抽奖
-
-    while (!in.atEnd()) {
-        QString line = in.readLine().trimmed();
-        if (line.isEmpty()) continue;
-
-        if (line.startsWith("[") && line.endsWith("]")) {
-            currentSection = line.mid(1, line.length() - 2);
-            // 关键逻辑：如果标题含有 (All)，说明这一节的人不占黑名单
-            isAllMemberSection = currentSection.endsWith("(All)");
-        } else {
-            QStringList parts = line.split(" ");
-            if (parts.isEmpty()) continue;
-            QString empId = parts.at(0);
-
-            // 1. 只有【不是】全员抽奖的人，才加入全局黑名单
-            if (!isAllMemberSection) {
-                m_usedPeople.insert(empId);
+        while (!in.atEnd()) {
+            QString line = in.readLine().trimmed();
+            if (line.isEmpty()) continue;
+            if (line.startsWith("[") && line.endsWith("]")) {
+                currentSection = line.mid(1, line.length() - 2);
+                isAllMemberSection = currentSection.endsWith("(All)");
+            } else {
+                QString empId = line.split(" ").at(0);
+                if (!isAllMemberSection) m_usedPeople.insert(empId);
+                prizeCountMap[currentSection]++;
             }
-
-            // 2. 统计人数（推算轮数用）
-            prizeCountMap[currentSection]++;
         }
+        file.close();
     }
-    file.close();
 
-    // --- 核心推算：根据已抽人数，恢复当前进行到哪个奖项、哪一轮 ---
+    // --- 核心恢复逻辑 ---
     bool found = false;
     for (int i = 0; i < m_prizes.size(); ++i) {
-        // 注意：对比时要考虑 (All) 后缀
         QString key = m_prizes[i].displayName;
         if (m_prizes[i].allowUsedPeople) key += "(All)";
 
@@ -519,17 +527,33 @@ void Widget::loadHistoryFromTxt() {
         }
     }
 
+    // 如果没找到未完成的进度，说明要么全抽完了，要么新加了奖项
     if (!found) {
-        m_currentPrizeIndex = m_prizes.size() - 1;
+        m_currentPrizeIndex = m_prizes.size() - 1; // 默认指向最后一个
         m_currentRound = m_prizes.last().totalRounds;
-        ui->startDrawButton->setEnabled(false);
-        ui->startDrawButton->setText("抽奖已全部结束");
+
+        // 只有当最后一个奖项也确实抽完了，才禁用
+        QString lastKey = m_prizes.last().displayName;
+        if (m_prizes.last().allowUsedPeople) lastKey += "(All)";
+        if (prizeCountMap.value(lastKey, 0) >= (m_prizes.last().totalRounds * m_prizes.last().winnersPerRound)) {
+            ui->startDrawButton->setEnabled(false);
+            ui->startDrawButton->setText("抽奖已全部结束");
+        } else {
+            // 否则，可能是新加的奖项，或者是由于配置变动导致的，重置到第一项
+            m_currentPrizeIndex = 0;
+            m_currentRound = 1;
+            ui->startDrawButton->setEnabled(true);
+            ui->startDrawButton->setText("开始抽奖");
+        }
+    } else {
+        ui->startDrawButton->setEnabled(true);
+        ui->startDrawButton->setText("开始抽奖");
     }
 
     updatePrizeUI();
     updateRoundUI();
 
-    // 更新界面上显示的剩余参与人数
+    // 更新左下角实际剩余人数
     int available = 0;
     for(const auto& p : m_people) if(!m_usedPeople.contains(p.employeeId)) available++;
     ui->joinCountLabel->setText(QString("参与人数: %1").arg(available));

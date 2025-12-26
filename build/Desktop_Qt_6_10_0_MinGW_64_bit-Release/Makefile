@@ -374,6 +374,7 @@ Makefile: ../../LuckyDraw.pro D:/Qt/QT_/6.10.0/mingw_64/mkspecs/win32-g++/qmake.
 		D:/Qt/QT_/6.10.0/mingw_64/mkspecs/features/toolchain.prf \
 		D:/Qt/QT_/6.10.0/mingw_64/mkspecs/features/default_pre.prf \
 		D:/Qt/QT_/6.10.0/mingw_64/mkspecs/features/win32/default_pre.prf \
+		../../xlsx/QXlsx.pri \
 		D:/Qt/QT_/6.10.0/mingw_64/mkspecs/features/resolve_config.prf \
 		D:/Qt/QT_/6.10.0/mingw_64/mkspecs/features/exclusive_builds_post.prf \
 		D:/Qt/QT_/6.10.0/mingw_64/mkspecs/features/default_post.prf \
@@ -397,6 +398,7 @@ Makefile: ../../LuckyDraw.pro D:/Qt/QT_/6.10.0/mingw_64/mkspecs/win32-g++/qmake.
 		../../LuckyDraw.pro \
 		D:/Qt/QT_/6.10.0/mingw_64/lib/Qt6Widgets.prl \
 		D:/Qt/QT_/6.10.0/mingw_64/lib/Qt6Gui.prl \
+		D:/Qt/QT_/6.10.0/mingw_64/lib/Qt6Xml.prl \
 		D:/Qt/QT_/6.10.0/mingw_64/lib/Qt6Core.prl \
 		D:/Qt/QT_/6.10.0/mingw_64/lib/Qt6EntryPoint.prl \
 		D:/Qt/QT_/6.10.0/mingw_64/mkspecs/features/build_pass.prf \
@@ -706,6 +708,7 @@ D:/Qt/QT_/6.10.0/mingw_64/mkspecs/features/exclusive_builds.prf:
 D:/Qt/QT_/6.10.0/mingw_64/mkspecs/features/toolchain.prf:
 D:/Qt/QT_/6.10.0/mingw_64/mkspecs/features/default_pre.prf:
 D:/Qt/QT_/6.10.0/mingw_64/mkspecs/features/win32/default_pre.prf:
+../../xlsx/QXlsx.pri:
 D:/Qt/QT_/6.10.0/mingw_64/mkspecs/features/resolve_config.prf:
 D:/Qt/QT_/6.10.0/mingw_64/mkspecs/features/exclusive_builds_post.prf:
 D:/Qt/QT_/6.10.0/mingw_64/mkspecs/features/default_post.prf:
@@ -729,6 +732,7 @@ D:/Qt/QT_/6.10.0/mingw_64/mkspecs/features/lex.prf:
 ../../LuckyDraw.pro:
 D:/Qt/QT_/6.10.0/mingw_64/lib/Qt6Widgets.prl:
 D:/Qt/QT_/6.10.0/mingw_64/lib/Qt6Gui.prl:
+D:/Qt/QT_/6.10.0/mingw_64/lib/Qt6Xml.prl:
 D:/Qt/QT_/6.10.0/mingw_64/lib/Qt6Core.prl:
 D:/Qt/QT_/6.10.0/mingw_64/lib/Qt6EntryPoint.prl:
 D:/Qt/QT_/6.10.0/mingw_64/mkspecs/features/build_pass.prf:

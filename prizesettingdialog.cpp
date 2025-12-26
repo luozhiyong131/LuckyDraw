@@ -15,7 +15,7 @@ PrizeSettingDialog::PrizeSettingDialog(const QVector<PrizeConfig> &prizes, QWidg
     table->setSelectionMode(QAbstractItemView::SingleSelection);
     table->setEditTriggers(QAbstractItemView::DoubleClicked | QAbstractItemView::AnyKeyPressed);
 
-    QStringList headers = {"ID", "等级名称", "奖品名称", "每轮人数", "总轮数", "图片路径 (双击选择)", "全员参与"};
+    QStringList headers = {"抽奖顺序", "等级名称", "奖品名称", "每轮人数", "总轮数", "图片路径 (双击选择)", "全员参与"};
     table->setColumnCount(headers.size());
     table->setHorizontalHeaderLabels(headers);
     table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);

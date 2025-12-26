@@ -102,6 +102,21 @@ public:
         btnSettings->setObjectName("btnSettings");
         btnSettings->setMinimumSize(QSize(68, 38));
         btnSettings->setMaximumSize(QSize(16777215, 16777215));
+        btnSettings->setStyleSheet(QString::fromUtf8("QPushButton {\n"
+"    background-color: rgba(255, 255, 255, 100);\n"
+"    border: 1px solid rgba(255, 255, 255, 150);\n"
+"    border-radius: 5px;\n"
+"    color: #FFFFFF;\n"
+"    font-size: 14px;\n"
+"}\n"
+"\n"
+"QPushButton:hover {\n"
+"    background-color: rgba(255, 255, 255, 150);\n"
+"}\n"
+"\n"
+"QPushButton:pressed {\n"
+"    background-color: rgba(200, 200, 200, 100);\n"
+"}"));
 
         gridLayout->addWidget(btnSettings, 9, 1, 1, 1);
 
@@ -164,8 +179,43 @@ public:
 
         prizeNameLabel = new QLabel(prizeContainer);
         prizeNameLabel->setObjectName("prizeNameLabel");
+        QPalette palette;
+        QBrush brush(QColor(255, 0, 0, 255));
+        brush.setStyle(Qt::BrushStyle::SolidPattern);
+        palette.setBrush(QPalette::ColorGroup::Active, QPalette::ColorRole::WindowText, brush);
+        QBrush brush1(QColor(0, 0, 0, 0));
+        brush1.setStyle(Qt::BrushStyle::SolidPattern);
+        palette.setBrush(QPalette::ColorGroup::Active, QPalette::ColorRole::Button, brush1);
+        palette.setBrush(QPalette::ColorGroup::Active, QPalette::ColorRole::Text, brush);
+        palette.setBrush(QPalette::ColorGroup::Active, QPalette::ColorRole::ButtonText, brush);
+        palette.setBrush(QPalette::ColorGroup::Active, QPalette::ColorRole::Base, brush1);
+        palette.setBrush(QPalette::ColorGroup::Active, QPalette::ColorRole::Window, brush1);
+        QBrush brush2(QColor(255, 0, 0, 128));
+        brush2.setStyle(Qt::BrushStyle::SolidPattern);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 12, 0)
+        palette.setBrush(QPalette::ColorGroup::Active, QPalette::ColorRole::PlaceholderText, brush2);
+#endif
+        palette.setBrush(QPalette::ColorGroup::Inactive, QPalette::ColorRole::WindowText, brush);
+        palette.setBrush(QPalette::ColorGroup::Inactive, QPalette::ColorRole::Button, brush1);
+        palette.setBrush(QPalette::ColorGroup::Inactive, QPalette::ColorRole::Text, brush);
+        palette.setBrush(QPalette::ColorGroup::Inactive, QPalette::ColorRole::ButtonText, brush);
+        palette.setBrush(QPalette::ColorGroup::Inactive, QPalette::ColorRole::Base, brush1);
+        palette.setBrush(QPalette::ColorGroup::Inactive, QPalette::ColorRole::Window, brush1);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 12, 0)
+        palette.setBrush(QPalette::ColorGroup::Inactive, QPalette::ColorRole::PlaceholderText, brush2);
+#endif
+        palette.setBrush(QPalette::ColorGroup::Disabled, QPalette::ColorRole::WindowText, brush);
+        palette.setBrush(QPalette::ColorGroup::Disabled, QPalette::ColorRole::Button, brush1);
+        palette.setBrush(QPalette::ColorGroup::Disabled, QPalette::ColorRole::Text, brush);
+        palette.setBrush(QPalette::ColorGroup::Disabled, QPalette::ColorRole::ButtonText, brush);
+        palette.setBrush(QPalette::ColorGroup::Disabled, QPalette::ColorRole::Base, brush1);
+        palette.setBrush(QPalette::ColorGroup::Disabled, QPalette::ColorRole::Window, brush1);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 12, 0)
+        palette.setBrush(QPalette::ColorGroup::Disabled, QPalette::ColorRole::PlaceholderText, brush2);
+#endif
+        prizeNameLabel->setPalette(palette);
         prizeNameLabel->setStyleSheet(QString::fromUtf8("\n"
-"             font-size: 42px; color: #ffeaa7; font-weight: bold;\n"
+"             font-size: 42px; color: #FF0000; font-weight: bold;\n"
 "             background: transparent;\n"
 "            "));
         prizeNameLabel->setAlignment(Qt::AlignmentFlag::AlignCenter);
@@ -188,7 +238,7 @@ public:
 
         gridLayout->addWidget(prizeLevelLabel, 4, 0, 1, 3);
 
-        horizontalSpacer = new QSpacerItem(379, 20, QSizePolicy::Policy::Expanding, QSizePolicy::Policy::Minimum);
+        horizontalSpacer = new QSpacerItem(391, 20, QSizePolicy::Policy::Expanding, QSizePolicy::Policy::Minimum);
 
         gridLayout->addItem(horizontalSpacer, 9, 2, 1, 1);
 

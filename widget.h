@@ -47,6 +47,8 @@ protected:
 
     // 数据加载逻辑
     void loadPeopleCsv(const QString &path);
+    void loadPeopleExcel(const QString &path);
+
     void loadPrizeConfig(const QString &path);
     void updateRoundUI();
     // UI 更新逻辑
