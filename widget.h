@@ -131,6 +131,7 @@ private:
     bool m_isRunning = false;      // 标识当前是否处于滚动动画状态
     bool m_isPendingPrizeSwitch = false; // 标识是否处于“点击进入下一奖项”的等待期
     QVector<QLabel*> m_dynamicLabels;    // 右侧滚动区域的 Label 控件集合
+
 };
 
 #endif // WIDGET_H

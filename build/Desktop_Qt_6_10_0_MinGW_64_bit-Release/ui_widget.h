@@ -256,6 +256,7 @@ public:
         rightTitle = new QLabel(rightPanel);
         rightTitle->setObjectName("rightTitle");
         rightTitle->setMinimumSize(QSize(0, 158));
+        rightTitle->setMaximumSize(QSize(16777215, 158));
         rightTitle->setStyleSheet(QString::fromUtf8("\n"
 "            font-family: \"Microsoft YaHei\"; font-size: 48px; font-weight: 900; color: #ffffff;\n"
 "           "));
